@@ -285,48 +285,68 @@ WHERE nome = 'Teste Um';
 DELETE FROM clientes
 WHERE nome = 'Teste Dois';
 
--- Clientes cadastrados
+-- =========================================
+-- PARTE 5 - CONSULTAS E FILTROS
+-- =========================================
+
+
+-- 1. Clientes cadastrados
 SELECT *
 FROM clientes
 ORDER BY nome;
 
--- Veículos do cliente 1
+-- 2. Veículos de um cliente
 SELECT *
 FROM veiculos
 WHERE id_cliente = 1
 ORDER BY modelo;
 
--- Serviços entre R$ 100 e R$ 500 usando AND
+-- 3. Serviços acima de R$ 500
 SELECT *
 FROM servicos
-WHERE preco >= 100
-  AND preco <= 500
-ORDER BY preco;
+WHERE preco > 500
+ORDER BY preco DESC;
 
--- Serviços entre R$ 100 e R$ 500
+-- 4. Serviços entre R$ 100 e R$ 500
 SELECT *
 FROM servicos
 WHERE preco BETWEEN 100 AND 500
 ORDER BY preco;
 
--- Clientes cujo nome começa com A ou M
+-- 5. Clientes que começam com A ou M
 SELECT *
 FROM clientes
 WHERE nome LIKE 'A%'
    OR nome LIKE 'M%'
 ORDER BY nome;
 
--- Ordens que ainda estão abertas ou em andamento
+-- 6. Ordens abertas ou em andamento
 SELECT *
 FROM ordens_servico
 WHERE status IN ('Aberta', 'Em andamento')
 ORDER BY data_abertura;
 
--- 5 serviços mais caros
+-- 7. Cinco serviços mais caros
 SELECT *
 FROM servicos
 ORDER BY preco DESC
 LIMIT 5;
+
+-- 8. Exemplo utilizando AND
+SELECT *
+FROM servicos
+WHERE preco >= 100
+  AND preco <= 500
+ORDER BY preco;
+
+
+-- =========================================
+-- PARTE 6 - FUNÇÕES DE AGREGAÇÃO
+-- =========================================
+
+-- =========================================
+-- PARTE 6 - FUNÇÕES DE AGREGAÇÃO
+-- =========================================
 
 -- Quantidade de clientes
 SELECT COUNT(*) AS total_clientes
@@ -348,6 +368,264 @@ FROM servicos;
 SELECT AVG(preco) AS preco_medio
 FROM servicos;
 
--- Valor total dos serviços realizados
-SELECT SUM(quantidade * preco_unitario) AS valor_total_servicos
-FROM itens_ordem;
+-- Valor total dos serviços cadastrados
+SELECT SUM(preco) AS valor_total_servicos
+FROM servicos;
+
+-- =========================================
+-- PARTE 7 - GROUP BY E HAVING
+-- =========================================
+
+-- Quantidade de veículos por cliente
+SELECT id_cliente, COUNT(*) AS quantidade_veiculos
+FROM veiculos
+GROUP BY id_cliente;
+
+-- Quantidade de ordens atendidas por mecânico
+SELECT id_mecanico, COUNT(*) AS quantidade_ordens
+FROM ordens_servico
+GROUP BY id_mecanico;
+
+-- Mecânicos que participaram de mais de uma ordem
+SELECT id_mecanico, COUNT(*) AS quantidade_ordens
+FROM ordens_servico
+GROUP BY id_mecanico
+HAVING COUNT(*) > 1;
+
+-- =========================================
+-- PARTE 8 - JOINS
+-- =========================================
+
+-- 1. Cliente + veículos
+SELECT c.nome, v.placa, v.marca, v.modelo
+FROM clientes c
+INNER JOIN veiculos v
+    ON c.id_cliente = v.id_cliente;
+
+-- 2. Ordem + cliente + veículo
+SELECT o.id_ordem, c.nome, v.modelo, v.placa, o.status
+FROM ordens_servico o
+INNER JOIN veiculos v
+    ON o.id_veiculo = v.id_veiculo
+INNER JOIN clientes c
+    ON v.id_cliente = c.id_cliente;
+
+-- 3. Ordem + mecânico
+SELECT o.id_ordem, m.nome AS mecanico, o.status
+FROM ordens_servico o
+INNER JOIN mecanicos m
+    ON o.id_mecanico = m.id_mecanico;
+
+-- 4. Ordem + serviços realizados
+SELECT o.id_ordem, s.nome AS servico, i.quantidade, i.preco_unitario
+FROM ordens_servico o
+INNER JOIN itens_ordem i
+    ON o.id_ordem = i.id_ordem
+INNER JOIN servicos s
+    ON i.id_servico = s.id_servico;
+
+-- 5. Consulta completa
+SELECT
+    c.nome AS cliente,
+    v.modelo AS veiculo,
+    v.placa,
+    m.nome AS mecanico,
+    s.nome AS servico,
+    i.preco_unitario AS valor,
+    o.data_abertura AS data,
+    o.status
+FROM ordens_servico o
+INNER JOIN veiculos v
+    ON o.id_veiculo = v.id_veiculo
+INNER JOIN clientes c
+    ON v.id_cliente = c.id_cliente
+INNER JOIN mecanicos m
+    ON o.id_mecanico = m.id_mecanico
+INNER JOIN itens_ordem i
+    ON o.id_ordem = i.id_ordem
+INNER JOIN servicos s
+    ON i.id_servico = s.id_servico;
+
+-- 6. LEFT JOIN
+SELECT c.nome AS cliente, v.placa, v.modelo
+FROM clientes c
+LEFT JOIN veiculos v
+    ON c.id_cliente = v.id_cliente;
+    
+-- =========================================
+-- PARTE 9 - SUBQUERIES
+-- =========================================
+
+-- 1. Serviços com preço acima da média geral
+SELECT nome, preco
+FROM servicos
+WHERE preco > (
+    SELECT AVG(preco)
+    FROM servicos
+);
+
+-- 2. Clientes que possuem mais de um veículo
+SELECT nome
+FROM clientes
+WHERE id_cliente IN (
+    SELECT id_cliente
+    FROM veiculos
+    GROUP BY id_cliente
+    HAVING COUNT(*) > 1
+);
+
+-- 3. Mecânicos que possuem mais de uma ordem
+SELECT nome
+FROM mecanicos
+WHERE id_mecanico IN (
+    SELECT id_mecanico
+    FROM ordens_servico
+    GROUP BY id_mecanico
+    HAVING COUNT(*) > 1
+);
+
+-- =========================================
+-- PARTE 10 - STORED PROCEDURES
+-- =========================================
+
+DELIMITER $$
+
+-- 1. Cadastrar cliente
+CREATE PROCEDURE cadastrar_cliente(
+    IN p_nome VARCHAR(100),
+    IN p_cpf VARCHAR(14),
+    IN p_telefone VARCHAR(20),
+    IN p_email VARCHAR(100)
+)
+BEGIN
+    INSERT INTO clientes (nome, cpf, telefone, email)
+    VALUES (p_nome, p_cpf, p_telefone, p_email);
+END $$
+
+
+-- 2. Abrir ordem de serviço
+CREATE PROCEDURE abrir_ordem(
+    IN p_id_veiculo INT,
+    IN p_id_mecanico INT,
+    IN p_observacoes VARCHAR(255)
+)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM veiculos
+        WHERE id_veiculo = p_id_veiculo
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Veículo não encontrado';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM mecanicos
+        WHERE id_mecanico = p_id_mecanico
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Mecânico não encontrado';
+    END IF;
+
+    INSERT INTO ordens_servico
+        (id_veiculo, id_mecanico, observacoes)
+    VALUES
+        (p_id_veiculo, p_id_mecanico, p_observacoes);
+END $$
+
+
+-- 3. Alterar status da ordem
+CREATE PROCEDURE alterar_status_ordem(
+    IN p_id_ordem INT,
+    IN p_novo_status VARCHAR(30)
+)
+BEGIN
+    UPDATE ordens_servico
+    SET status = p_novo_status
+    WHERE id_ordem = p_id_ordem;
+END $$
+
+
+-- 4. Cadastrar serviço
+CREATE PROCEDURE cadastrar_servico(
+    IN p_nome VARCHAR(100),
+    IN p_descricao VARCHAR(255),
+    IN p_preco DECIMAL(10,2)
+)
+BEGIN
+    INSERT INTO servicos (nome, descricao, preco)
+    VALUES (p_nome, p_descricao, p_preco);
+END $$
+
+DELIMITER ;
+
+-- =========================================
+-- PARTE 11 - TRIGGERS
+-- =========================================
+
+-- Tabela para registrar alterações de preço
+CREATE TABLE historico_precos (
+    id_historico INT AUTO_INCREMENT PRIMARY KEY,
+    id_servico INT NOT NULL,
+    preco_anterior DECIMAL(10,2) NOT NULL,
+    preco_novo DECIMAL(10,2) NOT NULL,
+    data_alteracao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_historico_servico
+        FOREIGN KEY (id_servico)
+        REFERENCES servicos(id_servico)
+);
+
+DELIMITER $$
+
+-- =========================================
+-- TRIGGER 1 - HISTÓRICO DE PREÇO
+-- =========================================
+
+CREATE TRIGGER trg_historico_preco
+AFTER UPDATE ON servicos
+FOR EACH ROW
+BEGIN
+    IF OLD.preco <> NEW.preco THEN
+        INSERT INTO historico_precos
+            (id_servico, preco_anterior, preco_novo)
+        VALUES
+            (OLD.id_servico, OLD.preco, NEW.preco);
+    END IF;
+END $$
+
+
+-- =========================================
+-- TRIGGER 2 - DATA DE FINALIZAÇÃO
+-- =========================================
+
+CREATE TRIGGER trg_finalizar_ordem
+BEFORE UPDATE ON ordens_servico
+FOR EACH ROW
+BEGIN
+    IF NEW.status = 'Concluída'
+       AND OLD.status <> 'Concluída' THEN
+        SET NEW.data_fechamento = CURRENT_TIMESTAMP;
+    END IF;
+END $$
+
+
+-- =========================================
+-- TRIGGER 3 - HISTÓRICO DE STATUS
+-- =========================================
+
+CREATE TRIGGER trg_historico_status
+AFTER UPDATE ON ordens_servico
+FOR EACH ROW
+BEGIN
+    IF OLD.status <> NEW.status THEN
+        INSERT INTO historico_ordens
+            (id_ordem, status_anterior, status_novo, observacao)
+        VALUES
+            (NEW.id_ordem, OLD.status, NEW.status,
+             'Status alterado automaticamente pelo sistema');
+    END IF;
+END $$
+
+DELIMITER ;
