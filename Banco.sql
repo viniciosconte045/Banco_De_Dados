@@ -1,3 +1,4 @@
+
 CREATE DATABASE IF NOT EXISTS oficina_mecanica_DAVD;
 
 USE oficina_mecanica_DAVD;
@@ -203,9 +204,13 @@ INSERT INTO ordens_servico
 (9, 4, 'Aberta', 'Diagnóstico eletrônico'),
 (10, 5, 'Concluída', 'Revisão completa');
 -- Preenche a data de fechamento das ordens concluídas
+SET SQL_SAFE_UPDATES = 0;
+
 UPDATE ordens_servico
 SET data_fechamento = CURRENT_TIMESTAMP
 WHERE status = 'Concluída';
+
+SET SQL_SAFE_UPDATES = 1;
 
 -- =========================================
 -- PARTE 3 - ITENS DE SERVIÇO
@@ -267,23 +272,37 @@ WHERE id_cliente = 1;
 -- PARTE 4 - UPDATE
 -- =========================================
 
+SET SQL_SAFE_UPDATES = 0;
+
 UPDATE clientes
 SET telefone = '(48) 98888-1111'
 WHERE nome = 'Teste Um';
+
+SET SQL_SAFE_UPDATES = 1;
+
+SET SQL_SAFE_UPDATES = 0;
 
 UPDATE clientes
 SET email = 'teste2_novo@email.com'
 WHERE nome = 'Teste Dois';
 
+SET SQL_SAFE_UPDATES = 1;
+
 -- =========================================
 -- PARTE 4 - DELETE
 -- =========================================
+
+
+SET SQL_SAFE_UPDATES = 0;
 
 DELETE FROM clientes
 WHERE nome = 'Teste Um';
 
 DELETE FROM clientes
 WHERE nome = 'Teste Dois';
+
+SET SQL_SAFE_UPDATES = 1;
+
 
 -- =========================================
 -- PARTE 5 - CONSULTAS E FILTROS
@@ -439,6 +458,7 @@ INNER JOIN veiculos v
     ON o.id_veiculo = v.id_veiculo
 INNER JOIN clientes c
     ON v.id_cliente = c.id_cliente
+    
 INNER JOIN mecanicos m
     ON o.id_mecanico = m.id_mecanico
 INNER JOIN itens_ordem i
@@ -629,3 +649,225 @@ BEGIN
 END $$
 
 DELIMITER ;
+
+
+-- Teste CPF duplicado
+
+INSERT INTO clientes (nome, cpf, telefone, email)
+VALUES (
+    'Cliente Duplicado',
+    '111.111.111-11',
+    '(48) 90000-0000',
+    'duplicado@email.com'
+);
+-- Teste de CPF duplicado:
+-- O erro 1062 ocorreu porque o CPF já estava cadastrado.
+-- A restrição UNIQUE impediu a duplicação, como esperado.
+
+
+-- Teste de e-mail duplicado
+
+INSERT INTO clientes (nome, cpf, telefone, email)
+VALUES (
+    'Cliente Teste Email',
+    '999.888.777-66',
+    '(48) 98888-7777',
+    'joao@email.com'
+);
+
+-- Resultado esperado:
+-- O erro 1062 indica que o e-mail já está cadastrado.
+-- A restrição UNIQUE impede a duplicação, como esperado.
+
+-- Teste de placa duplicada
+
+INSERT INTO veiculos (placa, modelo, marca, ano, id_cliente)
+VALUES (
+    'ABC1D23',
+    'Civic',
+    'Honda',
+    2022,
+    1
+);
+
+-- Resultado esperado:
+-- O erro 1062 indica que a placa já está cadastrada.
+-- A restrição UNIQUE impede a duplicação, como esperado.
+
+-- Teste de CPF de mecânico duplicado
+
+INSERT INTO mecanicos (nome, cpf, telefone, especialidade)
+VALUES (
+    'Mecânico Teste',
+    '111.111.111-11',
+    '(48) 99999-0000',
+    'Motor'
+);
+-- Resultado esperado:
+-- O erro 1062 indica que o CPF já está cadastrado.
+-- A restrição UNIQUE impede o cadastro de mecânicos com CPF duplicado.
+
+-- Teste de nome de serviço duplicado
+
+INSERT INTO servicos (nome, preco)
+VALUES ('Troca de óleo', 150.00);
+
+-- Resultado esperado:
+-- Se o nome já estiver cadastrado, o erro 1062 indica duplicidade.
+-- A restrição UNIQUE impede o cadastro de serviços com o mesmo nome.
+
+-- Teste de chave estrangeira em veículos
+
+INSERT INTO veiculos (placa, modelo, marca, ano, id_cliente)
+VALUES (
+    'ZZZ9Z99',
+    'Gol',
+    'Volkswagen',
+    2020,
+    99999
+);
+
+-- Resultado esperado:
+-- O erro 1452 indica que o cliente informado não existe.
+-- A chave estrangeira impede cadastrar o veículo sem um cliente válido.
+
+-- Teste de chave estrangeira na ordem de serviço
+
+INSERT INTO ordens_servico (id_veiculo, id_mecanico, data_abertura, status)
+VALUES (99999, 1, NOW(), 'Aberta');
+
+-- Resultado esperado:
+-- O erro 1452 indica que o veículo informado não existe.
+-- A chave estrangeira impede criar uma ordem para um veículo inexistente.
+
+
+-- Teste de preço inválido
+
+INSERT INTO servicos (nome, preco)
+VALUES ('Servico Teste Preco Negativo', -50.00);
+
+-- Resultado esperado:
+-- O banco deve impedir o cadastro de um serviço
+-- com preço negativo.
+-- Resultado Real:
+-- O banco não impediu o cadastro do preço negativo
+
+
+
+-- Teste de exclusão de registro referenciado
+
+DELETE FROM clientes
+WHERE id_cliente = 1;
+
+-- Resultado esperado:
+-- O erro 1451 indica que o cliente está sendo referenciado por um veículo.
+-- A chave estrangeira impede excluir um cliente que possui veículos vinculados.
+
+
+
+-- Teste de ordem para veículo inexistente
+
+INSERT INTO ordens_servico (id_veiculo, id_mecanico, data_abertura, status)
+VALUES (99999, 1, NOW(), 'Aberta');
+
+-- Resultado esperado:
+-- O erro 1452 indica que o veículo informado não existe.
+-- A chave estrangeira impede criar uma ordem para um veículo inexistente.
+
+
+
+-- Parte 13 - Desafio de consulta final
+-- Relatório de gastos por cliente
+
+SELECT
+    c.nome AS cliente,
+    COUNT(DISTINCT os.id_ordem) AS quantidade_ordens,
+    COALESCE(SUM(io.quantidade * io.preco_unitario), 0) AS total_gasto
+FROM clientes c
+LEFT JOIN veiculos v
+    ON c.id_cliente = v.id_cliente
+LEFT JOIN ordens_servico os
+    ON v.id_veiculo = os.id_veiculo
+LEFT JOIN itens_ordem io
+    ON os.id_ordem = io.id_ordem
+GROUP BY c.id_cliente, c.nome
+ORDER BY total_gasto DESC;
+
+-- Resultado obtido:
+-- A consulta apresentou cada cliente, a quantidade de ordens de serviço e o total gasto.
+-- Os clientes sem serviços registrados apareceram com quantidade de ordens e total gasto iguais a zero.
+-- Os valores foram calculados com base nos serviços registrados em cada ordem de serviço.
+
+
+
+-- Parte 14 - Desafio avançado
+-- Relatório de serviços por mecânico
+
+SELECT
+    m.nome AS mecanico,
+    COUNT(DISTINCT os.id_ordem) AS quantidade_ordens,
+    COALESCE(SUM(io.quantidade), 0) AS quantidade_servicos,
+    COALESCE(SUM(io.quantidade * io.preco_unitario), 0) AS valor_total
+FROM mecanicos m
+LEFT JOIN ordens_servico os
+    ON m.id_mecanico = os.id_mecanico
+LEFT JOIN itens_ordem io
+    ON os.id_ordem = io.id_ordem
+GROUP BY m.id_mecanico, m.nome
+ORDER BY valor_total DESC;
+
+-- Resultado obtido:
+-- André Barbosa apresentou o maior valor em serviços, totalizando R$ 2.600,00.
+-- Foram registradas 2 ordens de serviço e 3 serviços realizados.
+-- O resultado foi obtido somando os valores dos serviços de cada mecânico,
+-- considerando a quantidade e o preço unitário de cada serviço.
+
+
+-- Parte 15 – Testes do banco de dados
+
+-- TESTE 1: Cadastrar cliente com CPF duplicado
+-- Resultado esperado: impedir o cadastro e apresentar erro 1062.
+-- Resultado obtido: erro 1062, CPF já cadastrado.
+
+-- TESTE 2: Cadastrar cliente com e-mail duplicado
+-- Resultado esperado: impedir o cadastro e apresentar erro 1062.
+-- Resultado obtido: erro 1062, e-mail já cadastrado.
+
+-- TESTE 3: Cadastrar veículo com placa duplicada
+-- Resultado esperado: impedir o cadastro e apresentar erro 1062.
+-- Resultado obtido: erro 1062, placa já cadastrada.
+
+-- TESTE 4: Cadastrar mecânico com CPF duplicado
+-- Resultado esperado: impedir o cadastro e apresentar erro 1062.
+-- Resultado obtido: erro 1062, CPF já cadastrado.
+
+-- TESTE 5: Cadastrar serviço com nome duplicado
+-- Resultado esperado: impedir o cadastro e apresentar erro 1062.
+-- Resultado obtido: erro 1062, nome do serviço já cadastrado.
+
+-- TESTE 6: Cadastrar veículo com cliente inexistente
+-- Resultado esperado: impedir o cadastro e apresentar erro 1452.
+-- Resultado obtido: erro 1452, cliente não encontrado.
+
+-- TESTE 7: Criar ordem de serviço para veículo inexistente
+-- Resultado esperado: impedir o cadastro e apresentar erro 1452.
+-- Resultado obtido: erro 1452, veículo não encontrado.
+
+-- TESTE 8: Cadastrar serviço com preço negativo
+-- Resultado esperado: impedir o cadastro do preço negativo.
+-- Resultado obtido: o banco aceitou o valor negativo.
+
+-- TESTE 9: Excluir cliente com veículo vinculado
+-- Resultado esperado: impedir a exclusão por causa da chave estrangeira.
+-- Resultado obtido: erro 1451, exclusão impedida.
+
+-- TESTE 10: Consultar o total gasto por cliente
+-- Resultado esperado: mostrar a quantidade de ordens e o total gasto por cliente.
+-- Resultado obtido: consulta executada corretamente. Rafael Martins apresentou o maior total, de R$ 1.850,00.
+
+-- TESTE 11: Consultar o valor dos serviços por mecânico
+-- Resultado esperado: mostrar a quantidade de ordens e o valor total por mecânico.
+-- Resultado obtido: consulta executada corretamente. André Barbosa apresentou o maior valor, de R$ 2.600,00.
+
+
+
